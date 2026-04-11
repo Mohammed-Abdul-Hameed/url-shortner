@@ -7,7 +7,7 @@ module.exports = {
     port: process.env.DB_PORT || 5432,
     database: process.env.DB_NAME || 'urlshortener',
     user: process.env.DB_USER || 'urluser',
-    password: process.env.DB_PASSWORD || 'urlpass123',
+    password: process.env.DB_PASSWORD || 'urlshortener_dev_password',
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

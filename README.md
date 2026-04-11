@@ -1,6 +1,22 @@
 # URL Shortener
 
-Production-grade URL shortener API built with Node.js, Express, PostgreSQL, and Redis.
+Production-style URL shortener API built with Node.js, Express, PostgreSQL, and Redis.
+
+## Project Readiness
+
+This project is **portfolio-demo ready**, but it is **not production-ready yet**.
+
+What is working well:
+- Core REST API endpoints are implemented.
+- PostgreSQL stores URL records and click counts.
+- Redis is used for URL caching and API rate limiting.
+- Docker Compose provides local Postgres and Redis infrastructure.
+- Manual curl verification passes for health checks, shortening, lookup, redirect, stats, validation errors, not-found cases, and rate limiting.
+
+What keeps it from being production-ready:
+- Automated tests are not implemented yet.
+- Some local URL generation and rate-limit edge cases need cleanup.
+- Observability, deployment hardening, CI, and security controls are still minimal.
 
 ## Run Locally
 
@@ -18,12 +34,14 @@ DB_HOST=localhost
 DB_PORT=5433
 DB_NAME=urlshortener
 DB_USER=urluser
-DB_PASSWORD=urlpass123
+DB_PASSWORD=urlshortener_dev_password
 REDIS_HOST=localhost
 REDIS_PORT=6379
 RATE_LIMIT=10
 ID_LENGTH=8
 ```
+
+Docker maps PostgreSQL from container port `5432` to host port `5433`. Because the Node.js app runs on the host during local development, use `DB_PORT=5433` in `.env`.
 
 3. Install dependencies and start the app:
 
@@ -136,6 +154,15 @@ CREATE TABLE urls (
 - PostgreSQL remains the source of truth for durability and analytics fields such as `click_count`.
 - The current redirect path updates click counts directly in PostgreSQL, which is simple and correct for small to medium traffic. For heavier traffic, this could be moved to asynchronous aggregation.
 
+## Latest Verification
+
+Last verified locally: **2026-04-11**.
+
+- `npm test` passes, but it reports `0` tests because no `*.test.js` files exist yet.
+- The manual curl suite passed locally against `http://localhost:3000`.
+- Docker services required for local verification: PostgreSQL and Redis.
+- Confirmed status codes: `200`, `201`, `302`, `400`, `404`, and `429`.
+
 ## Automated Test Status
 
 The project currently has a test script:
@@ -148,7 +175,7 @@ At the moment it runs successfully but no `*.test.js` files exist yet, so it rep
 
 ## Manual Test Cases
 
-Use these test cases to validate the API behavior from the specification.
+Use these stable curl commands to validate the API behavior from the specification. Replace `<shortCode>` with the value returned from `POST /api/shorten`.
 
 ### 1. Health Check
 
@@ -209,7 +236,8 @@ curl -i http://localhost:3000/api/url/<shortCode>
 Expected result:
 - Status code is `200`.
 - Response contains the same `shortCode`.
-- Response includes the original URL and metadata for the record.
+- Response includes the original URL.
+- Database-backed responses include `createdAt` and `clickCount`; cached responses may omit those fields until the cache behavior is improved.
 
 ### 6. Redirect Using a Short Code
 
@@ -289,7 +317,8 @@ curl -i http://localhost:3000/<shortCode>
 ```
 
 Expected result:
-- `clickCount` increases after redirect requests.
+- `clickCount` increases after redirect requests when the lookup response is served from PostgreSQL.
+- Current cached lookup responses may omit `clickCount`; see Known Issues.
 
 ## API Summary
 
@@ -300,3 +329,11 @@ Expected result:
 | `GET` | `/:shortCode` | Redirect to the original URL |
 | `GET` | `/api/stats` | Fetch service stats |
 | `GET` | `/health` | Health check |
+
+## Known Issues
+
+- `shortUrl` can produce `https://localhost:3000/...` during local runs when `PORT` is loaded as a string. The expected local URL should use `http`.
+- With `RATE_LIMIT=10`, the first `429` currently appears on the 12th API request, so the rate-limit check likely has an off-by-one issue.
+- Cached `GET /api/url/:shortCode` responses may omit `createdAt` and `clickCount` because Redis stores only the original URL.
+- `npm test` succeeds only because there are no test files yet; real automated coverage still needs to be added.
+- `.env.example` uses the container Postgres port `5432`, while Docker Compose exposes Postgres to the host on `5433`. Use `DB_PORT=5433` when running the app locally outside Docker.
